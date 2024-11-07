@@ -3,28 +3,34 @@
 #define RELAY_3_PIN 12      // Пин для реле 3
 #define RELAY_4_PIN 13      // Пин для реле 4
 
-// Пины для монетоприемника и светодиодов
-const int coinSlotPin = 11;       // Пин монетоприемника
-const int ledCoinPin = 9;         // Пин светодиода для монетки (Coin)
-const int ledPlayer1Pin = 8;      // Пин светодиода для 1 игрока
-const int ledPlayer2Pin = 10;     // Пин светодиода для 2 игрока
-const int relayPlayer1Pin = 6;    // Пин реле для 1 игрока
-const int relayPlayer2Pin = 5;    // Пин реле для 2 игрока
-const int relayCoinPin = 4;       // Пин реле для монетки
+const int ledCoinPin = 9;             // Пин светодиода для монетки (Coin)
+const int ledPlayer1Pin = 8;          // Пин светодиода для 1 игрока
+const int ledPlayer2Pin = 10;         // Пин светодиода для 2 игрока
+const int relayPlayer1Pin = 6;        // Пин реле для 1 игрока
+const int relayPlayer2Pin = 5;        // Пин реле для 2 игрока
+const int relayCoinPin = 4;           // Пин реле для монетки
 
-unsigned long timerStart = 0;            // Время начала отсчета после вставки монеты
-const unsigned long activeTime = 300000; // 5 минут (300000 миллисекунд)
-const unsigned long warningTime = 20000; // 20 секунд (20000 миллисекунд)
+const int coinSensorPins[] = {A0, A1, A2, A3}; // Пины для проверки напряжения
+const int voltageThresholds[] = {10, 10, 10, 10}; // Пороговые значения для каждого пина
+
+unsigned long timerStart = 0;         // Время начала отсчета после вставки монеты
+unsigned long buttonHoldStart = 0;    // Время начала удержания всех кнопок
+const unsigned long holdTime = 2000;  // Время удержания в миллисекундах
+const unsigned long activeTime = 300000; // 5 минут
+const unsigned long warningTime = 20000; // 20 секунд
 unsigned long lastBreathUpdate = 0;
 
-bool gameActive = false;           // Флаг для активной игры
-bool blinkPhase = false;           // Флаг для управления миганием в последние 20 секунд
-unsigned long blinkStartTime = 0;  // Время начала мигания
-int coinCount = 0;                 // Счетчик вставленных монет
+bool gameActive = false;              // Флаг для активной игры
+bool blinkPhase = false;              // Флаг для управления миганием в последние 20 секунд
+bool coinInserted = false;            // Флаг вставки "монеты"
+unsigned long blinkStartTime = 0;     // Время начала мигания
+int coinCount = 0;                    // Счетчик вставленных монет
 int breathValue = 0;
 bool breathUp = true;
 
 void setup() {
+  Serial.begin(9600);
+  
   // Настраиваем пины реле как выходы
   pinMode(RELAY_1_PIN, OUTPUT);
   pinMode(RELAY_2_PIN, OUTPUT);
@@ -35,7 +41,6 @@ void setup() {
   activateRelays();
 
   // Настраиваем остальные пины
-  pinMode(coinSlotPin, INPUT_PULLUP);
   pinMode(ledCoinPin, OUTPUT);
   pinMode(ledPlayer1Pin, OUTPUT);
   pinMode(ledPlayer2Pin, OUTPUT);
@@ -47,17 +52,36 @@ void setup() {
 }
 
 void loop() {
+  bool allPinsActive = true;
+  
+  for (int i = 0; i < 4; i++) {
+    int sensorValue = analogRead(coinSensorPins[i]);
+    Serial.print("Pin A"); Serial.print(i); Serial.print(" Value: "); Serial.println(sensorValue);
+    
+    // Проверка каждого пина на пороговое значение
+    if (sensorValue < voltageThresholds[i]) {
+      allPinsActive = false;
+    }
+  }
+
+  // Если все пины выше порога и удерживаются 2 секунды, симулируем вставку монетки
+  if (allPinsActive) {
+    if (buttonHoldStart == 0) {
+      buttonHoldStart = millis();
+    }
+    else if (millis() - buttonHoldStart >= holdTime && !coinInserted) {
+      Serial.println("Coin Inserted (All pins held)!");
+      coinInserted = true;
+      handleCoinInsertion();
+    }
+  } else {
+    buttonHoldStart = 0; // Сброс удержания, если хоть один пин не активен
+    coinInserted = false;
+  }
+
   // Анимация светодиода, если игра не активна
   if (!gameActive) {
     breatheLed(ledCoinPin);
-  }
-
-  // Проверка на вставку монеты
-  if (digitalRead(coinSlotPin) == LOW) {
-    delay(50); // Антидребезг
-    if (digitalRead(coinSlotPin) == LOW) {
-      handleCoinInsertion(); // Обрабатываем вставку монетки
-    }
   }
 
   if (gameActive) {
@@ -115,7 +139,7 @@ void activateAllRelaysAndLeds() {
   digitalWrite(ledPlayer2Pin, HIGH);  // Включаем светодиод для 2 игрока
 }
 
-// Активация реле и светодиодов
+// Активация реле и светодиодов для одного игрока
 void activateRelayAndLed(int relayPin, int ledPin) {
   digitalWrite(relayPin, LOW);  // Включаем реле
   digitalWrite(ledPin, HIGH);   // Включаем светодиод
@@ -144,9 +168,10 @@ void blinkCoinThreeTimes() {
   digitalWrite(ledCoinPin, HIGH); // Оставляем свет включенным
 }
 
+// Плавное мигание светодиода монетки в режиме ожидания
 void breatheLed(int pin) {
   unsigned long currentTime = millis();
-  if (currentTime - lastBreathUpdate > 8) {
+  if (currentTime - lastBreathUpdate > 5) {
     lastBreathUpdate = currentTime;
     if (breathUp) {
       breathValue++;
