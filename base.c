@@ -77,13 +77,13 @@ void loop() {
 // Активация реле в начале программы
 void activateRelays() {
   delay(10000);
-  digitalWrite(RELAY_1_PIN, LOW);
-  delay(1000);
-  digitalWrite(RELAY_2_PIN, LOW);
+  digitalWrite(RELAY_1_PIN, HIGH);
   delay(2000);
-  digitalWrite(RELAY_3_PIN, LOW);  
-  delay(1000);
-  digitalWrite(RELAY_4_PIN, LOW);
+  digitalWrite(RELAY_2_PIN, HIGH);
+  delay(2000);
+  digitalWrite(RELAY_3_PIN, HIGH);  
+  delay(5000);
+  digitalWrite(RELAY_4_PIN, HIGH);
 }
 
 // Обработка вставки монетки
